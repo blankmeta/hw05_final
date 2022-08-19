@@ -1,0 +1,13 @@
+{% load user_filters %}
+<input type="hidden" name="csrfmiddlewaretoken" value="">
+{% csrf_token %}
+{% include 'includes/form_fields.html' %}
+<div class="d-flex justify-content-end">
+  <button type="submit" class="btn btn-primary">
+    {% if is_edit %}
+      Сохранить
+    {% else %}
+      Добавить
+    {% endif %}
+  </button>
+</div>
