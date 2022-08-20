@@ -1,13 +1,14 @@
 from typing import Dict
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.paginator import Page
 from django.db.models.fields.files import ImageFieldFile
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from ..models import Post, Group
+from ..models import Post, Group, Follow
 
 User = get_user_model()
 
@@ -27,7 +28,7 @@ class PostsPagesTests(TestCase):
         super().setUpClass()
         cls.first_author = User.objects.create_user(
             username=cls.SAMPLE_FIRST_AUTHOR_NAME)
-        second_author = User.objects.create_user(username='somebody')
+        cls.second_author = User.objects.create_user(username='somebody')
         new_group = Group.objects.create(
             title='Группа 1',
             slug=cls.SAMPLE_GROUP_SLUG,
@@ -38,13 +39,15 @@ class PostsPagesTests(TestCase):
                 text='Sample test',
                 author=cls.first_author
                 if i < cls.POSTS_COUNT_WITH_FIRST_AUTHOR
-                else second_author,
+                else cls.second_author,
                 group=new_group if i < cls.POSTS_COUNT_WITH_GROUP else None
             )
 
     def setUp(self):
         self.author_client = Client()
         self.author_client.force_login(self.first_author)
+        self.second_author_client = Client()
+        self.second_author_client.force_login(self.second_author)
 
         small_gif = (
             b'\x47\x49\x46\x38\x39\x61\x02\x00'
@@ -70,6 +73,25 @@ class PostsPagesTests(TestCase):
             ),
             image=uploaded
         )
+
+    def check_follow_page(self):
+        second_author_content = self.second_author_client.get(
+            reverse('posts:follow_index')).content
+        self.my_new_post = Post.objects.create(
+            text='123',
+            author=self.first_author,
+            group=Group.objects.create(
+                title='thatsatestgroup',
+                slug='somegroup123',
+                description='Тестовая группа'
+            ),
+        )
+        self.second_author_client.get(reverse('posts:profile_follow', kwargs={
+            'username': self.first_author.username}))
+        cache.clear()
+        new_second_author_content = self.second_author_client.get(
+            reverse('posts:follow_index')).content
+        return second_author_content, new_second_author_content
 
     def check_context(self, reversed_url: reverse, expected: Dict):
         response = self.author_client.get(reversed_url)
@@ -204,7 +226,7 @@ class PostsPagesTests(TestCase):
     def test_first_profile_page_contains_ten_records(self):
         """Количество постов на первой странице
         записей пользователя равно 10."""
-        response = self.client.get(
+        response = self.author_client.get(
             reverse('posts:profile', kwargs={
                 'username': self.SAMPLE_FIRST_AUTHOR_NAME})
         )
@@ -213,7 +235,7 @@ class PostsPagesTests(TestCase):
 
     def test_second_profile_page_contains_two_records(self):
         """Количество постов на первой странице записей группы равно 1."""
-        response = self.client.get(reverse(
+        response = self.author_client.get(reverse(
             'posts:profile', kwargs={
                 'username': self.SAMPLE_FIRST_AUTHOR_NAME}) + '?page=2')
         self.assertEqual(
@@ -233,7 +255,7 @@ class PostsPagesTests(TestCase):
         self.assertIn(self.my_new_post, posts_on_page)
 
     def test_is_post_on_profile_page(self):
-        response = self.client.get((
+        response = self.author_client.get((
             reverse('posts:profile',
                     kwargs={'username': self.my_new_post.author.username})))
         posts_on_page = response.context.get('page_obj').object_list
@@ -266,8 +288,51 @@ class PostsPagesTests(TestCase):
                         'slug': self.SAMPLE_GROUP_SLUG}))
 
     def test_is_image_in_post_detail_context(self):
+        """В объекте паджинатора в context profile передается изображение"""
         response = self.author_client.get(
             reverse('posts:post_detail',
                     kwargs={'post_id': self.my_new_post.pk}))
         context = response.context
         self.assertIsInstance(context['post'].image, ImageFieldFile)
+
+    def test_authorized_user_can_subscribe_and_unsubscribe_to_another(self):
+        """Авторизованный пользователь может подписываться
+        на другого пользователя и удалять его из подписок"""
+        self.second_author_client.get(reverse('posts:profile_follow', kwargs={
+            'username': self.first_author.username}))
+        entry = Follow.objects.filter(user=self.second_author,
+                                      author=self.first_author)
+        self.assertEqual(len(entry), 1)  # One follow
+
+        self.second_author_client.get(
+            reverse('posts:profile_unfollow',
+                    kwargs={
+                        'username': self.first_author.username}))
+        entry = Follow.objects.filter(user=self.second_author,
+                                      author=self.first_author)
+        self.assertEqual(len(entry), 0)  # No follows
+
+    def test_authorized_user_can_not_multiple_subscribe(self):
+        """Авторизованный пользователь не может подписываться
+        на другого пользователя несколько раз"""
+        for i in range(2):
+            with self.subTest(i=i):
+                self.second_author_client.get(
+                    reverse('posts:profile_follow', kwargs={
+                        'username': self.first_author.username}))
+                entry = Follow.objects.filter(user=self.second_author,
+                                              author=self.first_author)
+                self.assertEqual(len(entry), 1)  # One follow
+
+    def test_new_post_exist_on_followers_page(self):
+        """Новая запись появляется в ленте у тех, кто подписан"""
+        self.second_author_client.get(reverse('posts:profile_follow', kwargs={
+            'username': self.first_author.username}))  # Новая подписка
+
+        content, new_content = self.check_follow_page()
+        self.assertNotEqual(content, new_content)
+
+    def test_new_post_not_exist_on_non_followers_page(self):
+        """Новая запись не появляется в ленте у тех, кто не подписан"""
+        content, new_content = self.check_follow_page()
+        self.assertEqual(content, new_content)

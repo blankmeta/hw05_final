@@ -43,7 +43,7 @@ class PostsURLTests(TestCase):
 
         for url in urls:
             with self.subTest(url=url):
-                response = self.client.get(url)
+                response = self.author_client.get(url)
                 self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_unexisting_page(self):
