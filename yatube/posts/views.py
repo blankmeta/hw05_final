@@ -50,15 +50,10 @@ def profile(request, username):
 
     page_obj = paginate_queryset(request, posts)
 
-    following = False
-    if Follow.objects.filter(user=request.user, author=user):
-        following = True
-
     context = {
         'page_obj': page_obj,
         'author': user,
         'posts_count': posts_count,
-        'following': following,
     }
 
     return render(request, 'posts/profile.html', context)
