@@ -45,7 +45,7 @@ def group_posts(request, slug):
 
 def profile(request, username):
     author = get_object_or_404(User, username=username)
-    posts = author.posts.select_related('author')
+    posts = author.posts.select_related('group')
     posts_count = posts.count()
 
     page_obj = paginate_queryset(request, posts)
@@ -113,7 +113,6 @@ def post_edit(request, post_id):
 
     if form.is_valid():
         model = form.save()
-        model.save()
 
         return redirect(reverse('posts:post_detail',
                                 args=[post_id]))
