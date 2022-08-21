@@ -112,7 +112,7 @@ def post_edit(request, post_id):
                     instance=current_post)
 
     if form.is_valid():
-        model = form.save()
+        form.save()
 
         return redirect(reverse('posts:post_detail',
                                 args=[post_id]))
