@@ -7,7 +7,7 @@
 {% block content %}
   <div class="container py-5">
     {% load cache %}
-    {% cache 20 follow_page %}
+    {% cache 5 follow_page %}
       {% include 'posts/includes/switcher.html' %}
       <h1>Подписки</h1>
       {% for post in page_obj %}
