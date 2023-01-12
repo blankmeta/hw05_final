@@ -1,3 +1,16 @@
-# hw05_final
+# YaTube – социальная сеть для публикации личных дневников
 
-[![CI](https://github.com/yandex-praktikum/hw05_final/actions/workflows/python-app.yml/badge.svg?branch=master)](https://github.com/yandex-praktikum/hw05_final/actions/workflows/python-app.yml)
+Проект социальной сети YaTube на основе MTV-архитектуры. 
+
+Имеется возможность создания постов, комментирования, групп пользователей. Написаны юниттесты для удобного расширения существующего функционала и рефакторинга кода. Реализована пагинация постов и кэширование страниц.
+
+____
+
+Установка:
+-----------
+
+Установите необходимые зависимости: ```pip install -r requirements.txt```
+
+Выполните миграции ```python manage.py migrate```
+
+Запустите проект ```python manage.py runserver```
